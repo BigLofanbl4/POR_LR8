@@ -1,0 +1,41 @@
+name: Laboratory 8 Docker
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Build image
+        run: docker build --tag "pok-lab08:$GITHUB_SHA" .
+      - name: Check HTTP response
+        run: |
+          container=$(docker run --rm --detach --publish 127.0.0.1:8080:80 \
+            "pok-lab08:$GITHUB_SHA")
+          trap 'docker stop "$container" >/dev/null' EXIT
+          curl --fail --silent --show-error --retry 5 --retry-connrefused \
+            http://127.0.0.1:8080/ --output /tmp/lab08-index.html
+          grep -F 'Лабораторная работа № 8' /tmp/lab08-index.html
+      - name: Log in to Docker Hub
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        uses: docker/login-action@v4
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Publish SHA-tagged image
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        env:
+          DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
+        run: |
+          image="$DOCKERHUB_USERNAME/pok-lab08:$GITHUB_SHA"
+          docker tag "pok-lab08:$GITHUB_SHA" "$image"
+          docker push "$image"
