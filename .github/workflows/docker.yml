@@ -21,9 +21,13 @@ jobs:
         run: |
           container=$(docker run --rm --detach --publish 127.0.0.1:8080:80 \
             "pok-lab08:$GITHUB_SHA")
-          trap 'docker stop "$container" >/dev/null' EXIT
-          curl --fail --silent --show-error --retry 5 --retry-connrefused \
-            http://127.0.0.1:8080/ --output /tmp/lab08-index.html
+          trap 'docker stop "$container" >/dev/null 2>&1 || true' EXIT
+          if ! curl --fail --silent --show-error --max-time 3 \
+            --retry 10 --retry-all-errors --retry-delay 1 --retry-max-time 20 \
+            http://127.0.0.1:8080/ --output /tmp/lab08-index.html; then
+            docker logs "$container" || true
+            exit 1
+          fi
           grep -F 'Лабораторная работа № 8' /tmp/lab08-index.html
       - name: Log in to Docker Hub
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
